@@ -1,0 +1,16 @@
+{
+  "id": "./",
+  "name": "Poly BTC Signal · 15m",
+  "short_name": "Poly BTC",
+  "description": "Read-only Polymarket US 15-minute Bitcoin reference-price signals and suggested exits",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07111f",
+  "theme_color": "#08101f",
+  "icons": [
+    {"src":"./icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"./icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}

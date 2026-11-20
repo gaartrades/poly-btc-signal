@@ -1,0 +1,23 @@
+const assert=require('node:assert/strict');
+const E=require('./engine.js');
+function near(a,b,epsilon=.00001){assert(Math.abs(a-b)<epsilon,`${a} != ${b}`)}
+assert.equal(E.slugFor(Date.parse('2026-11-16T18:20:00Z')/1000),'cpc-btc-updown-15m-2026-11-16-1815z');
+const quotes=E.quotesFromBbo({marketData:{bestBid:{value:'0.39'},bestAsk:{value:'0.41'},state:'MARKET_STATE_OPEN'}});
+near(quotes.UP.ask,.41);near(quotes.DOWN.ask,.61);near(quotes.DOWN.bid,.59);near(quotes.UP.spread,.02);
+assert.throws(()=>E.quotesFromBbo({marketData:{bestBid:{value:0.50},bestAsk:{value:.48}}}));
+const t0=Date.parse('2026-11-16T18:15:00Z')/1000,now=t0+420;
+const m={slug:E.slugFor(now),active:true,closed:false,startDate:new Date(t0*1000).toISOString(),endDate:new Date((t0+900)*1000).toISOString(),assetPriceTerms:{asset:{symbol:'btc'},priceToBeat:{value:'65000'},windowStart:new Date(t0*1000).toISOString(),windowEnd:new Date((t0+900)*1000).toISOString()}};
+const tr={spot:65250,priceAt:now,r1:.06,r3:.15,r5:.2,r10:.28,r20:.012,sigma:.00065};
+let result=E.evaluate({market:m,book:quotes,trend:tr,nowS:now});
+assert.equal(result.side,'UP');assert(Number.isFinite(result.score));assert(Number.isFinite(result.probUp));
+const badMarket={...m,assetPriceTerms:{...m.assetPriceTerms,priceToBeat:null}};
+assert.equal(E.evaluate({market:badMarket,book:quotes,trend:tr,nowS:now}).type,'WAIT');
+assert.equal(E.evaluate({market:m,book:quotes,trend:tr,nowS:t0+865}).type,'WAIT');
+let badBook=E.quotesFromBbo({marketData:{bestBid:{value:.25},bestAsk:{value:.42},state:'MARKET_STATE_OPEN'}});
+assert.equal(E.evaluate({market:m,book:badBook,trend:tr,nowS:now}).type,'WAIT');
+const minute=[];for(let i=0;i<34;i++)minute.push({timestamp:t0-1500+i*60,close:64950+i*8,tickCount:60});
+const second=[];for(let i=0;i<100;i++)second.push({timestamp:now-99+i,close:65200+i*.5,tickCount:1});
+const trend=E.collectTrend(minute,second,now);
+near(trend.spot,65249.5);assert(Number.isFinite(trend.r10));
+assert.throws(()=>E.collectTrend(minute,second,now+45));
+console.log('Engine smoke tests: 11 checks passed. Sample:',{type:result.type,side:result.side,score:result.score,estimateUp:result.probUp});
