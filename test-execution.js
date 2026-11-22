@@ -1,0 +1,27 @@
+const assert=require('node:assert/strict');
+const X=require('./execution.js'),E=require('./engine.js'),T=require('./tracker.js');
+function almost(a,b,eps=1e-8){assert(Math.abs(a-b)<eps,`${a} differs from ${b}`);}
+almost(X.feePerContract(.5,.095),.02375);
+almost(X.feeForOrder(.5,5,.095),.11875);
+assert(Number.isNaN(X.feePerContract(.5,.04)),'reject undocumented coefficient');
+const book=X.parseBook({marketData:{state:'MARKET_STATE_OPEN',bids:[{px:{value:'.40'},qty:'3'},{px:'.39',qty:'6'},{px:'.38',qty:'3'}],offers:[{px:'.42',qty:'3'},{px:'.43',qty:'6'},{px:'.44',qty:'3'}]}});
+const up=X.quote(book,'UP','BUY',5),down=X.quote(book,'DOWN','BUY',5);
+almost(up.price,.424);almost(down.price,.604);almost(up.impact,.004);almost(X.quote(book,'DOWN','SELL',5).price,.576);
+assert(X.opportunity(book,'UP',.90,.095,5).modeledRoundTripEdge>.3);
+assert.equal(X.quote(book,'UP','BUY',25).filled,false);
+const time=Date.now(),now=Math.floor(time/1000);const slot=Math.floor(now/900)*900;
+const m={slug:E.slugFor(now),active:true,closed:false,status:'MARKET_STATUS_OPEN',startDate:new Date(slot*1000).toISOString(),endDate:new Date((slot+900)*1000).toISOString(),assetPriceTerms:{asset:{symbol:'btc'},priceToBeat:{value:'65000'},windowStart:new Date(slot*1000).toISOString(),windowEnd:new Date((slot+900)*1000).toISOString()}};
+const tr={spot:65250,priceAt:now,r1:.06,r3:.15,r5:.20,r10:.28,r20:.012,sigma:.00065};
+let base={type:'TRADE',side:'UP',entry:.42,modelFair:.90,edge:.48,reasons:[],blockers:[],marketSlug:m.slug,tp:.60,sl:.30};
+const depth={asOf:Date.now(),slug:m.slug,book};
+let r=X.riskCheck(base,depth,tr,.095);assert.equal(r.type,'TRADE');assert.equal(r.depthVerified,true);assert(r.feeEstimate>.0);
+r=X.riskCheck(base,{...depth,asOf:Date.now()-22000},tr,.095);assert.equal(r.type,'WAIT');
+r=X.riskCheck(base,{...depth,slug:'wrong-market'},tr,.095);assert.equal(r.type,'WAIT');
+r=X.riskCheck(base,{...depth,book:X.parseBook({marketData:{bids:[{px:.4,qty:1}],offers:[{px:.42,qty:1}]}})},tr,.095);assert.equal(r.type,'WAIT');
+r=X.riskCheck({...base,modelFair:.45},{...depth},tr,.095);assert.equal(r.type,'WAIT');
+assert.equal(X.regime({...tr,sigma:.003}).name,'HIGH VOLATILITY');
+const paper=T.paperFromSignal({...base,depthBuyPrice:.424,feeCoefficient:.095,score:80,probUp:.9},m.slug,Date.now(),now+900,.40);
+assert.equal(paper.strategyVersion,'v1.8');assert.equal(paper.feeCoefficient,.095);assert.equal(paper.depthEntryPrice,.424);
+T.closePaper(paper,'TARGET_TOUCH',Date.now(),.65);paper.estimatedNetDollars=.83;
+assert(T.asCSV([paper]).includes('0.83'));
+console.log('v1.8 depth, fee, gating, storage tests passed.');
